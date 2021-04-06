@@ -284,7 +284,7 @@ bot.on("message", async function (message) {
         }
     }
 
-    if (command === "croustiLove"){
+    if (command === "croustilove"){
         if (message.member.voice.channel && !isPlaying) {
             await message.member.voice.channel.join().then(connection => {
                 isPlaying = true;
@@ -478,7 +478,7 @@ bot.on("message", async function (message) {
 
         var my_list = [" !ping -> test", " !jail + @mention -> send user to jail", " !stay -> Naig Robot restera avec nous sur le voice", " !lesel", " !deadgame",
             " !love", " !trello", " !soupe", " !ortolan", " !nani", " !tutut", " !prout", " !oma",
-         " !cbo", " !crousti", " !croustiLove"," !victime", " !honteux", " !oskur", " !dge", " !chomage", ]
+         " !cbo", " !crousti", " !croustilove"," !victime", " !honteux", " !oskur", " !dge", " !chomage", " !souffrir" ]
         const list = my_list.map((item, i) => `${i + 1}. ${item}`).join("\r\n")
         message.channel.send(list)
     }
