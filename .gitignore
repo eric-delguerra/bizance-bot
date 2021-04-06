@@ -1,8 +1,3 @@
-<<<<<<< HEAD
 /config.json
 /node_modules/
-=======
-node_modules/
-config.json
->>>>>>> 15defa55529361c5d4ba1f094d2742963427bc1f
 /.idea/
