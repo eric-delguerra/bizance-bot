@@ -1,10 +1,10 @@
 const Discord = require("discord.js");
-const config = require("./config.json");
+// const config = require("./config.json");
 const {MessageEmbed} = require("discord.js");
 const bot = new Discord.Client();
 
-bot.login(config.BOT_TOKEN);
-
+// bot.login(config.BOT_TOKEN);
+bot.login(process.env.TOKEN)
 const prefix = "!"
 
 //
