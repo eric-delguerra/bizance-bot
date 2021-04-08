@@ -1,5 +1,4 @@
 const Discord = require("discord.js");
-const config = require("./config.json");
 const {MessageEmbed} = require("discord.js");
 const bot = new Discord.Client();
 
@@ -7,6 +6,8 @@ const bot = new Discord.Client();
 // Dev
 // bot.login(config.BOT_TOKEN);
 // const prefix = ":"
+// const config = require("./config.json");
+    
 
 // Prod
 bot.login(process.env.TOKEN)
