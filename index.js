@@ -1,17 +1,16 @@
 const Discord = require("discord.js");
-// const config = require("./config.json");
+const config = require("./config.json");
 const {MessageEmbed} = require("discord.js");
 const bot = new Discord.Client();
 
+
+// Dev
 // bot.login(config.BOT_TOKEN);
+// const prefix = ":"
+
+// Prod
 bot.login(process.env.TOKEN)
 const prefix = "!"
-
-//
-// 'use strict';
-// const client = new Discord.Client();
-// const list = client.guilds.cache.get("myServerID");
-// list.members.cache.forEach(member => console.log(member.user.username));
 
 
 let isPlaying = false;
@@ -20,7 +19,7 @@ let stayWithUs = false;
 
 bot.on('ready', function () {
     bot.user.setActivity('filtrer le sel')
-    bot.user.setUsername('Naig RoBot')
+    bot.user.setUsername('Naig Robot')
 })
 
 bot.on("message", async function (message) {
@@ -31,14 +30,25 @@ bot.on("message", async function (message) {
     const args = commandBody.split(' ');
     const command = args.shift().toLowerCase();
 
-
-
     if (command === "jail") {
         if (message.mentions.members.size) { // or message.mentions.members.size > 0
             let userToMove = message.mentions.members.first()
-            // console.log(userToMove.voice)
-            userToMove.voice.setChannel("224563297939226625")
-            message.reply("Il va nous foutre la paix comme ça.")
+
+            //Gestion du Tosi
+            if(message.author.id === "245634957081313281") {
+                let random = Math.floor(Math.random() * 2) + 1
+                if (random === 1) {
+                    userToMove.voice.setChannel("224563297939226625")
+                    message.reply("Il va nous foutre la paix comme ça.")
+                } else {
+                    message.member.voice.setChannel("224563297939226625")
+                    message.reply("Dommage")
+                }
+            } else {
+                // console.log(userToMove.voice)
+                userToMove.voice.setChannel("224563297939226625")
+                message.reply("Il va nous foutre la paix comme ça.")
+            }
         }
     }
 
