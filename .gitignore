@@ -2,4 +2,3 @@
 /node_modules/
 /.idea/
 /configFirebase.json
-/public/uploads/*
