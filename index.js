@@ -20,12 +20,11 @@ app.use(fileUpload({}));
 // const firebaseConfig = require('./configFirebase.json');
 
 
-
 // Prod
 bot.login(process.env.TOKEN)
 const prefix = "!"
 
-
+let firstConnection = true
 let firebaseConfig = {
     apiKey: process.env.APIKEY,
     authDomain: process.env.AUTHDOMAINE,
@@ -46,10 +45,33 @@ onlineData.on('value', (snapshot) => {
     console.log("valeur mise à jour")
     const data = snapshot.val();
     databaseRequest = []
-    for (const property in data) {
-        databaseRequest.push({"command": property, "path": data[property].path})
+
+    if (firstConnection) {
+        // On va recréer les fichiers avec leurs buffers enregistrés lorsque l'on relance le serveur et qu'il se réinstall completement
+        firstConnection = false
+        for (const property in data) {
+            databaseRequest.push({"command": property, "path": data[property].path})
+            if (data[property].buffer) {
+                return new Promise(function (resolve, reject) {
+                    fs.writeFile(data[property].path, data[property].buffer, function (err) {
+                        if (err) {
+                            console.log(err)
+                            reject()
+                        } else {
+                            console.log(property + " existe de nouveau !")
+                            resolve()
+                        }
+                    });
+                })
+            }
+        }
+    } else {
+        for (const property in data) {
+            databaseRequest.push({"command": property, "path": data[property].path})
+        }
     }
 });
+
 
 app.listen(port, () => {
     console.log("Ca tourne")
@@ -58,6 +80,7 @@ app.listen(port, () => {
 app.get('/', (req, res) => {
     res.sendFile(path.join(__dirname + '/html/index.html'));
 })
+
 
 // Reception et enregistrement firebase
 app.post('/fileUpload', (req, res) => {
@@ -75,9 +98,12 @@ app.post('/fileUpload', (req, res) => {
                     console.log(err)
                     res.sendFile(path.join(__dirname + '/html/error.html'))
                 } else {
+                    //Creation dans firebase
                     firebase.database().ref('request/' + req.body.message).set({
-                        path: filePath + extension
+                        path: filePath + extension,
+                        buffer: req.files.file.data
                     })
+                        // Fin de la promise
                         .then(() => {
                             res.sendFile(path.join(__dirname + '/html/success.html'))
                         })
@@ -112,7 +138,7 @@ bot.on("message", async function (message) {
     const args = commandBody.split(' ');
     const command = args.shift().toLowerCase();
 
-    if (command === "databaseLength"){
+    if (command === "databaseLength") {
         console.log(databaseRequest.length)
     }
 
@@ -622,5 +648,5 @@ bot.on('guildMemberAdd', member => {
 });
 
 module.exports = {
-    "firebase" : firebase
+    "firebase": firebase
 }
