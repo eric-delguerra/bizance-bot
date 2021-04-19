@@ -45,31 +45,10 @@ onlineData.on('value', (snapshot) => {
     console.log("valeur mise à jour")
     const data = snapshot.val();
     databaseRequest = []
-
-    if (firstConnection) {
-        // On va recréer les fichiers avec leurs buffers enregistrés lorsque l'on relance le serveur et qu'il se réinstall completement
-        firstConnection = false
-        for (const property in data) {
-            databaseRequest.push({"command": property, "path": data[property].path})
-            if (data[property].buffer) {
-                return new Promise(function (resolve, reject) {
-                    fs.writeFile(data[property].path, data[property].buffer, function (err) {
-                        if (err) {
-                            console.log(err)
-                            reject()
-                        } else {
-                            console.log(property + " existe de nouveau !")
-                            resolve()
-                        }
-                    });
-                })
-            }
-        }
-    } else {
-        for (const property in data) {
-            databaseRequest.push({"command": property, "path": data[property].path})
-        }
+    for (const property in data) {
+        databaseRequest.push({"command": property, "path": data[property].path})
     }
+
 });
 
 
@@ -101,7 +80,6 @@ app.post('/fileUpload', (req, res) => {
                     //Creation dans firebase
                     firebase.database().ref('request/' + req.body.message).set({
                         path: filePath + extension,
-                        buffer: req.files.file.data
                     })
                         // Fin de la promise
                         .then(() => {
@@ -129,6 +107,12 @@ bot.on('ready', function () {
     bot.user.setActivity('filtrer le sel')
     bot.user.setUsername('Naig Robot')
 })
+
+// Liste des commandes rentrées manuellement
+let my_list_sound = [ "love", "trello", "soupe", "ortolan", "nani", "tutut", "prout", "oma",
+    "cbo", "crousti", "croustilove", "victime", "honteux", "oskur", "dge", "chomage", "souffrir"]
+let my_list_other = [" !ping -> test", " !jail + @mention -> send user to jail", " !stay -> Naig Robot restera avec nous sur le voice", " !lesel", " !deadgame"]
+
 
 bot.on("message", async function (message) {
     if (message.author.bot) return;
@@ -626,9 +610,7 @@ bot.on("message", async function (message) {
 
     if (command === 'helpo') {
 
-        var my_list = [" !ping -> test", " !jail + @mention -> send user to jail", " !stay -> Naig Robot restera avec nous sur le voice", " !lesel", " !deadgame",
-            " !love", " !trello", " !soupe", " !ortolan", " !nani", " !tutut", " !prout", " !oma",
-            " !cbo", " !crousti", " !croustilove", " !victime", " !honteux", " !oskur", " !dge", " !chomage", " !souffrir"]
+        let my_list = my_list_other.concat(my_list_sound)
         const list = my_list.map((item, i) => `${i + 1}. ${item}`).join("\r\n")
         message.channel.send(list)
     }
