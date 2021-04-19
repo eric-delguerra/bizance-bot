@@ -138,8 +138,7 @@ bot.on("message", async function (message) {
 
                         dispatcher.on('error', console.error);
                     })
-
-
+                        .catch((err) => console.log(err))
                 }
             }
         }
