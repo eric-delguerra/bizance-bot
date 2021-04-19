@@ -17,6 +17,8 @@ app.use(fileUpload({}));
 // const config = require("./config.json");
 // bot.login(config.BOT_TOKEN);
 // const prefix = ":"
+// const firebaseConfig = require('./configFirebase.json');
+
 
 
 // Prod
@@ -24,7 +26,7 @@ bot.login(process.env.TOKEN)
 const prefix = "!"
 
 
-let heroConfig = {
+let firebaseConfig = {
     apiKey: process.env.APIKEY,
     authDomain: process.env.AUTHDOMAINE,
     projectId: process.env.PROJECTID,
@@ -33,7 +35,6 @@ let heroConfig = {
     appId: process.env.APPID,
     measurementId: process.env.MEASUREMENTID
 };
-const firebaseConfig = require('./configFirebase.json') || heroConfig;
 firebase.initializeApp(firebaseConfig.config);
 let database = firebase.database()
 let databaseRequest = []
