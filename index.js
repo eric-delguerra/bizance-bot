@@ -35,7 +35,8 @@ let firebaseConfig = {
     appId: process.env.APPID,
     measurementId: process.env.MEASUREMENTID
 };
-firebase.initializeApp(firebaseConfig.config);
+
+firebase.initializeApp(firebaseConfig);
 let database = firebase.database()
 let databaseRequest = []
 
