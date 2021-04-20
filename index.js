@@ -6,9 +6,6 @@ const app = express()
 let port = process.env.PORT || 3000
 const cors = require('cors')
 const fileUpload = require('express-fileupload')
-const path = require('path');
-const functions = require('./functions')
-const fs = require('fs')
 app.use(cors())
 app.use(fileUpload({}));
 
@@ -36,68 +33,10 @@ let firebaseConfig = {
 };
 
 firebase.initializeApp(firebaseConfig);
-let database = firebase.database()
-let databaseRequest = []
-
-// Ecoute si de nouvelles request sont ajoutées
-let onlineData = firebase.database().ref('request/');
-onlineData.on('value', (snapshot) => {
-    console.log("valeur mise à jour")
-    const data = snapshot.val();
-    databaseRequest = []
-    for (const property in data) {
-        databaseRequest.push({"command": property, "path": data[property].path})
-    }
-
-});
-
 
 app.listen(port, () => {
     console.log("Ca tourne")
 })
-
-app.get('/', (req, res) => {
-    res.sendFile(path.join(__dirname + '/html/index.html'));
-})
-
-
-// Reception et enregistrement firebase
-app.post('/fileUpload', (req, res) => {
-    if (req.files.file === null) {
-        res.sendFile(path.join(__dirname + '/html/index.html'))
-    }
-    if (functions.convert(parseInt(req.files.file.size)) < 1.01) {
-
-        return new Promise(function (resolve, reject) {
-            let filePath = './public/uploads/' + req.body.message + Date.now()
-            let extension = req.files.file.name.substr(req.files.file.name.indexOf('.'));
-
-            fs.writeFile(filePath + extension, req.files.file.data, function (err) {
-                if (err) {
-                    console.log(err)
-                    res.sendFile(path.join(__dirname + '/html/error.html'))
-                } else {
-                    //Creation dans firebase
-                    firebase.database().ref('request/' + req.body.message).set({
-                        path: filePath + extension,
-                    })
-                        // Fin de la promise
-                        .then(() => {
-                            res.sendFile(path.join(__dirname + '/html/success.html'))
-                        })
-                        .catch((err) => {
-                            console.log(err)
-                            res.sendFile(path.join(__dirname + '/html/error.html'))
-                        });
-                }
-            });
-        })
-
-    } else {
-        res.sendFile(path.join(__dirname + '/html/error.html'))
-    }
-})
-
 
 let isPlaying = false;
 let stayWithUs = false;
@@ -122,37 +61,6 @@ bot.on("message", async function (message) {
     const args = commandBody.split(' ');
     const command = args.shift().toLowerCase();
 
-    if (command === "databaseLength") {
-        console.log(databaseRequest.length)
-    }
-
-    if (databaseRequest.length > 0) {
-        for (let i = 0; i < databaseRequest.length; i++) {
-            if (command === databaseRequest[i].command) {
-                if (message.member.voice.channel && !isPlaying) {
-                    await message.member.voice.channel.join().then(connection => {
-                        isPlaying = true;
-                        const dispatcher = connection.play(databaseRequest[i].path, {volume: 0.5});
-
-                        dispatcher.on('start', () => {
-                            console.log(databaseRequest[i].command + ' is now playing!');
-                        });
-
-                        dispatcher.on('finish', () => {
-                            isPlaying = false;
-                            setTimeout(() => {
-                                stayWithUs ? null : stayWithUs ? null : connection.disconnect();
-                            }, 1000)
-                            console.log(databaseRequest[i].command + ' has finished playing!');
-                        });
-
-                        dispatcher.on('error', console.error);
-                    })
-                        .catch((err) => console.log(err))
-                }
-            }
-        }
-    }
 
     if (command === "jail") {
         if (message.mentions.members.size) { // or message.mentions.members.size > 0
@@ -628,7 +536,3 @@ bot.on('guildMemberAdd', member => {
     // Send the message, mentioning the member
     channel.send(`Salut ${member} et bienvenue sur le serveur !`);
 });
-
-module.exports = {
-    "firebase": firebase
-}
