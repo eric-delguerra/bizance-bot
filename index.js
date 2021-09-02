@@ -2,35 +2,40 @@ const Discord = require("discord.js");
 const bot = new Discord.Client();
 const firebase = require("firebase");
 const express = require('express')
+const ytdl = require('ytdl-core')
+const ytsr = require('ytsr')
 const app = express()
 let port = process.env.PORT || 3000
 const cors = require('cors')
 const fileUpload = require('express-fileupload')
 app.use(cors())
 app.use(fileUpload({}));
-
+const dotenv = require('dotenv');
+dotenv.config();
+let devMode = false
 
 // Dev
-// const config = require("./config.json");
-// bot.login(config.BOT_TOKEN);
-// const prefix = ":"
-// const firebaseConfig = require('./configFirebase.json');
+devMode = true
+const config = require("./config.json");
+bot.login(config.BOT_TOKEN);
+const prefix = "?"
+const firebaseConfig = require('./configFirebase.json');
+const repliesFunctions = require("./playingSound");
 
 
 // Prod
-bot.login(process.env.TOKEN)
-const prefix = "!"
-
-let firstConnection = true
-let firebaseConfig = {
-    apiKey: process.env.APIKEY,
-    authDomain: process.env.AUTHDOMAINE,
-    projectId: process.env.PROJECTID,
-    storageBucket: process.env.STORAGEBUCKET,
-    messagingSenderId: process.env.MESSAGINGSENDERID,
-    appId: process.env.APPID,
-    measurementId: process.env.MEASUREMENTID
-};
+// bot.login(process.env.BOT_TOKEN)
+// const prefix = "!"
+//
+// let firebaseConfig = {
+//     apiKey: process.env.APIKEY,
+//     authDomain: process.env.AUTHDOMAINE,
+//     projectId: process.env.PROJECTID,
+//     storageBucket: process.env.STORAGEBUCKET,
+//     messagingSenderId: process.env.MESSAGINGSENDERID,
+//     appId: process.env.APPID,
+//     measurementId: process.env.MEASUREMENTID
+// };
 
 firebase.initializeApp(firebaseConfig);
 
@@ -40,18 +45,21 @@ app.listen(port, () => {
 
 let isPlaying = false;
 let stayWithUs = false;
+let musicQueue = [];
+const queue = new Map();
 
 
 bot.on('ready', function () {
-    bot.user.setActivity('filtrer le sel')
-    bot.user.setUsername('Naig Robot')
+    devMode ? bot.user.setUsername('Naig Robot upgrade') : bot.user.setUsername('Naig Robot')
+    devMode ? bot.user.setActivity('filtrer les bugs') : bot.user.setActivity('filtrer le sel')
 })
 
 // Liste des commandes rentrées manuellement
-let my_list_sound = [ "love", "trello", "soupe", "ortolan", "nani", "tutut", "prout", "oma",
+let my_list_sound = ["love", "trello", "soupe", "ortolan", "nani", "tutut", "prout", "oma",
     "cbo", "crousti", "croustilove", "victime", "honteux", "oskur", "dge", "chomage", "souffrir"]
 let my_list_other = [" !ping -> test", " !jail + @mention -> send user to jail", " !stay -> Naig Robot restera avec nous sur le voice", " !lesel", " !deadgame"]
 
+const regExpYoutube = /^(?:https?:\/\/)?(?:m\.|www\.)?(?:youtu\.be\/|youtube\.com\/(?:embed\/|v\/|watch\?v=|watch\?.+&v=))((\w|-){11})(?:\S+)?$/;
 
 bot.on("message", async function (message) {
     if (message.author.bot) return;
@@ -60,6 +68,7 @@ bot.on("message", async function (message) {
     const commandBody = message.content.slice(prefix.length);
     const args = commandBody.split(' ');
     const command = args.shift().toLowerCase();
+    const serverQueue = queue.get(message.guild.id);
 
 
     if (command === "jail") {
@@ -95,412 +104,109 @@ bot.on("message", async function (message) {
     }
 
     if (command === "ping") {
-        message.reply("PONG")
+        repliesFunctions.ping(message)
     }
 
-    if (command === "love") {
-        if (message.member.voice.channel && !isPlaying) {
-            await message.member.voice.channel.join().then(connection => {
-                isPlaying = true;
-                const dispatcher = connection.play('./audios/Love.mp3', {volume: 0.5});
+    switch (command) {
+        case 'play':
+            await execute(message, serverQueue);
+            break;
+        case 'stop':
+            stop(message, serverQueue);
+            break;
+        case 'skip':
+            skip(message, serverQueue);
+            break;
+    }
 
-                dispatcher.on('start', () => {
-                    console.log('Love.mp3 is now playing!');
-                });
-
-                dispatcher.on('finish', () => {
-                    isPlaying = false;
-                    setTimeout(() => {
-                        stayWithUs ? null : stayWithUs ? null : connection.disconnect();
-                    }, 1000)
-                    console.log('Love.mp3 has finished playing!');
-                });
-
-                // Always remember to handle errors appropriately!
-                dispatcher.on('error', console.error);
-            })
+    async function execute(message, serverQueue) {
+        let vc = message.member.voice.channel;
+        if (!vc) {
+            return message.channel.send("Tu dois être dans un vocal pour mettre ta musique de merde");
+        } else {
+            let stream
+            let searchResult
+            if (commandBody.slice(5).match(regExpYoutube)) {
+                stream = ytdl(musicQueue[0], {filter: 'audioonly'})
+            } else {
+                searchResult = await ytsr(commandBody.slice(5), {limit: 1})
+                stream = ytdl(searchResult.items[0].url, {filter: 'audioonly'})
+            }
 
 
+            if (!serverQueue) {
+                const queueConstructor = {
+                    txtChannel: message.channel,
+                    vChannel: vc,
+                    connection: null,
+                    songs: [],
+                    volume: 10,
+                    playing: true,
+                    songsTitles: []
+                };
+                queue.set(message.guild.id, queueConstructor);
+
+                queueConstructor.songs.push(stream);
+                queueConstructor.songsTitles.push(searchResult.items[0].title);
+
+                try {
+                    let connection = await vc.join();
+                    queueConstructor.connection = connection;
+                    play(message.guild, queueConstructor.songs[0]);
+                } catch (err) {
+                    console.error(err);
+                    queue.delete(message.guild.id);
+                    return message.channel.send(`Petite erreur pour rejoindre le vocal apparement ${err}`)
+                }
+            } else {
+                serverQueue.songs.push(stream);
+                serverQueue.songsTitles.push(searchResult.items[0].title);
+                return message.channel.send(`Ton jolie petit son ${searchResult.items[0].title} est ajouté à la liste`);
+            }
         }
     }
 
-    if (command === "ortolan") {
-        if (message.member.voice.channel && !isPlaying) {
-            await message.member.voice.channel.join().then(connection => {
-                isPlaying = true;
-                const dispatcher = connection.play('./audios/ortolan.mp3', {volume: 0.5});
-
-                dispatcher.on('start', () => {
-                    console.log('ortolan.mp3 is now playing!');
-                });
-
-                dispatcher.on('finish', () => {
-                    isPlaying = false;
-                    setTimeout(() => {
-                        stayWithUs ? null : stayWithUs ? null : connection.disconnect();
-                    }, 1000)
-                    console.log('ortolan.mp3 has finished playing!');
-                });
-
-                // Always remember to handle errors appropriately!
-                dispatcher.on('error', console.error);
-            })
-
-
+    function play(guild, song) {
+        const serverQueue = queue.get(guild.id);
+        if (!song) {
+            serverQueue.vChannel.leave();
+            queue.delete(guild.id);
+            return;
         }
+        const dispatcher = serverQueue.connection
+            .play(song)
+            .on('finish', () => {
+                serverQueue.songs.shift();
+                serverQueue.songsTitles.shift();
+                play(guild, serverQueue.songs[0]);
+            })
+        serverQueue.txtChannel.send(`"${serverQueue.songsTitles[0]}" est en cours`)
     }
 
-    if (command === "chomage") {
-        if (message.member.voice.channel && !isPlaying) {
-            await message.member.voice.channel.join().then(connection => {
-                isPlaying = true;
-                const dispatcher = connection.play('./audios/chomage.mp3', {volume: 0.5});
-
-                dispatcher.on('start', () => {
-                    console.log('chomage.mp3 is now playing!');
-                });
-
-                dispatcher.on('finish', () => {
-                    isPlaying = false;
-                    setTimeout(() => {
-                        stayWithUs ? null : stayWithUs ? null : connection.disconnect();
-                    }, 1000)
-                    console.log('chomage.mp3 has finished playing!');
-                });
-
-                // Always remember to handle errors appropriately!
-                dispatcher.on('error', console.error);
-            })
-
-
-        }
+    function stop(message, serverQueue) {
+        if (!message.member.voice.channel)
+            return message.channel.send("Il faut être dans le vocal pour stopper le bot. Qui peut le stopper ?")
+        serverQueue.songs = [];
+        serverQueue.connection.dispatcher.end();
     }
 
-    if (command === "soupe") {
-        if (message.member.voice.channel && !isPlaying) {
-            await message.member.voice.channel.join().then(connection => {
-                isPlaying = true;
-                const dispatcher = connection.play('./audios/soupe.mp3', {volume: 0.5});
-
-                dispatcher.on('start', () => {
-                    console.log('soupe.mp3 is now playing!');
-                });
-
-                dispatcher.on('finish', () => {
-                    isPlaying = false;
-                    setTimeout(() => {
-                        stayWithUs ? null : stayWithUs ? null : connection.disconnect();
-                    }, 1000)
-                    console.log('soupe.mp3 has finished playing!');
-                });
-
-                // Always remember to handle errors appropriately!
-                dispatcher.on('error', console.error);
-            })
-
-        }
+    function skip(message, serverQueue) {
+        if (!message.member.voice.channel)
+            return message.channel.send("Il faut être dans le vocal pour pouvoir passer à la suivante");
+        if (!serverQueue)
+            return message.channel.send("C'est la dernière de la liste");
+        serverQueue.connection.dispatcher.end();
     }
 
-    if (command === "nani") {
-        if (message.member.voice.channel && !isPlaying) {
-            await message.member.voice.channel.join().then(connection => {
-                isPlaying = true;
-                const dispatcher = connection.play('./audios/nani.mp3', {volume: 0.5});
-
-                dispatcher.on('start', () => {
-                    console.log('nani.mp3 is now playing!');
-                });
-
-                dispatcher.on('finish', () => {
-                    isPlaying = false;
-                    setTimeout(() => {
-                        stayWithUs ? null : stayWithUs ? null : connection.disconnect();
-                    }, 1000)
-                    console.log('nani.mp3 has finished playing!');
-                });
-
-                // Always remember to handle errors appropriately!
-                dispatcher.on('error', console.error);
-            })
-
-        }
+    if (my_list_sound.find(el => command === el)) {
+        console.log('Son trouvé !')
+        await repliesFunctions.playingRegisterSound(command, message, function (value) {
+            isPlaying = value
+        })
+    } else {
+        console.log('Le son ' + command + " n'existe pas")
     }
 
-    if (command === "tutut") {
-        if (message.member.voice.channel && !isPlaying) {
-            await message.member.voice.channel.join().then(connection => {
-                isPlaying = true;
-                const dispatcher = connection.play('./audios/tut-tut-fils-de-pute.mp3', {volume: 0.5});
-
-                dispatcher.on('start', () => {
-                    console.log('tutut.mp3 is now playing!');
-                });
-
-                dispatcher.on('finish', () => {
-                    isPlaying = false;
-                    setTimeout(() => {
-                        stayWithUs ? null : stayWithUs ? null : connection.disconnect();
-                    }, 1000)
-                    console.log('tutut.mp3 has finished playing!');
-                });
-
-                // Always remember to handle errors appropriately!
-                dispatcher.on('error', console.error);
-            })
-
-        }
-    }
-
-    if (command === "prout") {
-        if (message.member.voice.channel && !isPlaying) {
-            await message.member.voice.channel.join().then(connection => {
-                isPlaying = true;
-                const dispatcher = connection.play('./audios/perfect-fart.mp3', {volume: 0.5});
-
-                dispatcher.on('start', () => {
-                    console.log('prout.mp3 is now playing!');
-                });
-
-                dispatcher.on('finish', () => {
-                    isPlaying = false;
-                    setTimeout(() => {
-                        stayWithUs ? null : stayWithUs ? null : connection.disconnect();
-                    }, 1000)
-                    console.log('prout.mp3 has finished playing!');
-                });
-
-                // Always remember to handle errors appropriately!
-                dispatcher.on('error', console.error);
-            })
-
-        }
-    }
-
-    if (command === "oma") {
-        if (message.member.voice.channel && !isPlaying) {
-            await message.member.voice.channel.join().then(connection => {
-                isPlaying = true;
-                const dispatcher = connection.play('./audios/oma.mp3', {volume: 0.3});
-
-                dispatcher.on('start', () => {
-                    console.log('oma.mp3 is now playing!');
-                });
-
-                dispatcher.on('finish', () => {
-                    isPlaying = false;
-                    setTimeout(() => {
-                        stayWithUs ? null : stayWithUs ? null : connection.disconnect();
-                    }, 1000)
-                    console.log('oma.mp3 has finished playing!');
-                });
-
-                // Always remember to handle errors appropriately!
-                dispatcher.on('error', console.error);
-            })
-
-        }
-    }
-
-    if (command === "cbo") {
-        if (message.member.voice.channel && !isPlaying) {
-            await message.member.voice.channel.join().then(connection => {
-                isPlaying = true;
-                const dispatcher = connection.play('./audios/julien.mp3', {volume: 0.5});
-
-                dispatcher.on('start', () => {
-                    console.log('cbo.mp3 is now playing!');
-                });
-
-                dispatcher.on('finish', () => {
-                    isPlaying = false;
-                    setTimeout(() => {
-                        stayWithUs ? null : connection.disconnect();
-                    }, 1000)
-                    console.log('cbo.mp3 has finished playing!');
-                });
-
-                // Always remember to handle errors appropriately!
-                dispatcher.on('error', console.error);
-            })
-
-        }
-    }
-
-    if (command === "croustilove") {
-        if (message.member.voice.channel && !isPlaying) {
-            await message.member.voice.channel.join().then(connection => {
-                isPlaying = true;
-                const dispatcher = connection.play('./audios/croustiLove.mp3', {volume: 0.5});
-
-                dispatcher.on('start', () => {
-                    console.log('croustiLove.mp3 is now playing!');
-                });
-
-                dispatcher.on('finish', () => {
-                    isPlaying = false;
-                    setTimeout(() => {
-                        stayWithUs ? null : connection.disconnect();
-                    }, 1000)
-                    console.log('croustiLove.mp3 has finished playing!');
-                });
-
-                // Always remember to handle errors appropriately!
-                dispatcher.on('error', console.error);
-            })
-
-        }
-    }
-
-    if (command === "crousti") {
-        if (message.member.voice.channel && !isPlaying) {
-
-            await message.member.voice.channel.join().then(connection => {
-                isPlaying = true;
-                const dispatcher = connection.play('./audios/halfSalt.mp3', {volume: 0.5});
-
-                dispatcher.on('start', () => {
-                    console.log('crousti.mp3 is now playing!');
-                });
-
-                dispatcher.on('finish', () => {
-                    isPlaying = false;
-                    setTimeout(() => {
-                        stayWithUs ? null : connection.disconnect();
-                    }, 1000)
-                    console.log('crousti.mp3 has finished playing!');
-                });
-
-                // Always remember to handle errors appropriately!
-                dispatcher.on('error', console.error);
-            })
-        }
-
-    }
-
-    if (command === "souffrir") {
-        if (message.member.voice.channel && !isPlaying) {
-            await message.member.voice.channel.join().then(connection => {
-                isPlaying = true;
-                const dispatcher = connection.play('./audios/souffrir.mp3', {volume: 0.5});
-
-                dispatcher.on('start', () => {
-                    console.log('souffrir.mp3 is now playing!');
-                });
-
-                dispatcher.on('finish', () => {
-                    isPlaying = false;
-                    setTimeout(() => {
-                        stayWithUs ? null : connection.disconnect();
-                    }, 1000)
-                    console.log('souffrir.mp3 has finished playing!');
-                });
-
-                // Always remember to handle errors appropriately!
-                dispatcher.on('error', console.error);
-            })
-
-        }
-    }
-
-    if (command === "honteux") {
-        if (message.member.voice.channel && !isPlaying) {
-            await message.member.voice.channel.join().then(connection => {
-                isPlaying = true;
-                const dispatcher = connection.play('./audios/honteux.mp3', {volume: 0.5});
-
-                dispatcher.on('start', () => {
-                    console.log('honteux.mp3 is now playing!');
-                });
-
-                dispatcher.on('finish', () => {
-                    isPlaying = false;
-                    setTimeout(() => {
-                        stayWithUs ? null : connection.disconnect();
-                    }, 1000)
-                    console.log('honteux.mp3 has finished playing!');
-                });
-
-                // Always remember to handle errors appropriately!
-                dispatcher.on('error', console.error);
-            })
-
-        }
-    }
-
-    if (command === "oskur") {
-        if (message.member.voice.channel && !isPlaying) {
-            await message.member.voice.channel.join().then(connection => {
-                isPlaying = true;
-                const dispatcher = connection.play('./audios/jeanne_au_secours.mp3', {volume: 0.5});
-
-                dispatcher.on('start', () => {
-                    console.log('oskur.mp3 is now playing!');
-                });
-
-                dispatcher.on('finish', () => {
-                    isPlaying = false;
-                    setTimeout(() => {
-                        stayWithUs ? null : connection.disconnect();
-                    }, 1000)
-                    console.log('oskur.mp3 has finished playing!');
-                });
-
-                // Always remember to handle errors appropriately!
-                dispatcher.on('error', console.error);
-            })
-
-        }
-    }
-
-    if (command === "victime") {
-        if (message.member.voice.channel && !isPlaying) {
-            await message.member.voice.channel.join().then(connection => {
-                isPlaying = true;
-                const dispatcher = connection.play('./audios/victime-boloss.mp3', {volume: 0.5});
-
-                dispatcher.on('start', () => {
-                    console.log('victime.mp3 is now playing!');
-                });
-
-                dispatcher.on('finish', () => {
-                    isPlaying = false;
-                    setTimeout(() => {
-                        stayWithUs ? null : connection.disconnect();
-                    }, 1000)
-                    console.log('victime.mp3 has finished playing!');
-                });
-
-                // Always remember to handle errors appropriately!
-                dispatcher.on('error', console.error);
-            })
-
-        }
-    }
-
-    if (command === "dge") {
-        if (message.member.voice.channel && !isPlaying) {
-            await message.member.voice.channel.join().then(connection => {
-                const dispatcher = connection.play('./audios/davidge.mp3', {volume: 0.7});
-                isPlaying = true;
-
-                dispatcher.on('start', () => {
-                    console.log('dge.mp3 is now playing!');
-                });
-
-                dispatcher.on('finish', () => {
-                    isPlaying = false;
-                    setTimeout(() => {
-                        stayWithUs ? null : connection.disconnect();
-                    }, 1000)
-                    console.log('dge.mp3 has finished playing!');
-                });
-
-                // Always remember to handle errors appropriately!
-                dispatcher.on('error', console.error);
-            })
-
-        }
-    }
 
     if (command === "trello") {
         message.reply("Pour proposer vos idées c'est ici : https://trello.com/b/ACwYoRr7/les-id%C3%A9es-pour-le-bot")
